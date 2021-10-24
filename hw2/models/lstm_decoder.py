@@ -33,14 +33,16 @@ class LSTMCrossAttention(nn.Module):
 
 
 class BairuLSTMDecoder(BairuDecoder):
-    def __init__(self, config: BairuConfig, dictionary,):
+    def __init__(self, config: BairuConfig, dictionary, token_embedding = None):
         super().__init__(dictionary)
         num_tokens = dictionary.num_tokens
         self.padding_idx = config.pad_token_id
         self.hidden_size = config.decoder_hidden_size
         self.hidden_layer = config.decoder_hidden_layer
-        self.token_embedding = nn.Embedding(num_embeddings = num_tokens, embedding_dim = self.embedding_dim, padding_idx = self.padding_idx, )
-
+        if token_embedding is None:
+            self.token_embedding = nn.Embedding(num_embeddings = num_tokens, embedding_dim = self.embedding_dim, padding_idx = self.padding_idx, )
+        else:
+            self.token_embedding = token_embedding
         self.LSTMLayers = nn.ModuleList(
             [
                 LSTMCell(input_size = config.embedding_dim, hidden_size = config.decoder_hidden_size)
@@ -110,7 +112,10 @@ class BairuLSTMDecoder(BairuDecoder):
         x = torch.stack(outs, dim = 0)
         if not self.batch_first:
             x = x.transpose(0, 1)
-        return x,[]
+        return {
+            'output':x,
+            'others':[]
+        }
 
     def output_layer(self, features, **kwargs):
         x = self.output_projection(features)

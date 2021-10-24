@@ -10,13 +10,18 @@ from .utils import get_positions
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 
 class BairuTransformerEncoder(BairuEncoder):
-    def __init__(self, config: BairuConfig, dictionary, ):
+    def __init__(self, config: BairuConfig, dictionary, token_embedding = None):
         super().__init__(dictionary)
         num_tokens = dictionary.num_tokens
         self.embedding_dim = config.embedding_dim
         self.padding_idx = config.pad_token_id
         self.hidden_size = config.hidden_size
-        self.token_embedding = nn.Embedding(num_embeddings = num_tokens, embedding_dim = self.embedding_dim, padding_idx = self.padding_idx, )
+        if self.token_embedding is None:
+            self.token_embedding = nn.Embedding(num_embeddings = num_tokens, embedding_dim = self.embedding_dim, padding_idx = self.padding_idx, )
+
+        else:
+            self.token_embedding = token_embedding
+
         if config.layernorm_embedding:
             self.layernorm_embedding = torch.nn.LayerNorm(self.embedding_dim)
         else:
