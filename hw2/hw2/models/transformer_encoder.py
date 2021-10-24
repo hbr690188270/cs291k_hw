@@ -14,9 +14,9 @@ class BairuTransformerEncoder(BairuEncoder):
         super().__init__(dictionary)
         num_tokens = dictionary.num_tokens
         self.embedding_dim = config.embedding_dim
-        self.padding_idx = config.pad_token_id
+        self.padding_idx = dictionary.pad()
         self.hidden_size = config.hidden_size
-        if self.token_embedding is None:
+        if token_embedding is None:
             self.token_embedding = nn.Embedding(num_embeddings = num_tokens, embedding_dim = self.embedding_dim, padding_idx = self.padding_idx, )
 
         else:
@@ -35,7 +35,7 @@ class BairuTransformerEncoder(BairuEncoder):
         self.dropout = nn.Dropout(p = config.hidden_dropout_prob)
         self.batch_first = config.batch_first
 
-        self.encoder_layer = TransformerEncoderLayer(d_model = self.hidden_size, dim_feedforward = config.intermediate_size, 
+        self.encoder_layer = TransformerEncoderLayer(d_model = self.hidden_size,nhead = config.num_attention_heads, dim_feedforward = config.intermediate_size, 
                                                         dropout = config.hidden_dropout_prob, activation = config.hidden_act, 
                                                         layer_norm_eps = config.layer_norm_eps, batch_first = self.batch_first)
 
@@ -59,7 +59,7 @@ class BairuTransformerEncoder(BairuEncoder):
         x = x * (1- encoder_padding_mask.unsqueeze(-1).type_as(x))
         if not self.batch_first:
             x = x.transpose(0, 1)
-        x = self.encoder(x)
+        x = self.encoder(x, src_key_padding_mask = encoder_padding_mask)
 
         if not self.batch_first:
             x = x.transpose(0, 1)

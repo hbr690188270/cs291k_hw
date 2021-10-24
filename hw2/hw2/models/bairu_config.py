@@ -5,9 +5,9 @@ class BairuConfig():
         vocab_size=30522,
         embedding_dim = 768,
         hidden_size=768,
-        num_hidden_layers=12,
+        num_hidden_layers=2,
         num_attention_heads=12,
-        intermediate_size=3072,
+        intermediate_size=2048,
         hidden_act="gelu",
         hidden_dropout_prob=0.1,
         attention_probs_dropout_prob=0.1,
@@ -20,14 +20,13 @@ class BairuConfig():
         layernorm_embedding = True,
         use_cache=True,
         classifier_dropout=None,
-        decoder_embedding_dim = 256,
+        decoder_embedding_dim = 768,
         decoder_hidden_size = 512,
-        decoder_hidden_layer = 12,
+        decoder_hidden_layer = 2,
         batch_first = True,
         decoder_residual = True,
         **kwargs
     ):
-        super().__init__(pad_token_id=pad_token_id, **kwargs)
 
         self.vocab_size = vocab_size
         self.embedding_dim = embedding_dim
@@ -44,6 +43,7 @@ class BairuConfig():
         self.layer_norm_eps = layer_norm_eps
         self.position_embedding_type = position_embedding_type
         self.layernorm_embedding = layernorm_embedding
+        self.pad_token_id = pad_token_id
         self.use_cache = use_cache
         self.classifier_dropout = classifier_dropout
         self.batch_first = batch_first

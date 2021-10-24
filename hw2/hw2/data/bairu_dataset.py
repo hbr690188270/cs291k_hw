@@ -7,18 +7,24 @@ from .bairu_dictionary import dictionary
 
 class MTDataset(Dataset):
     def __init__(self, src_dict:dictionary, tgt_dict:dictionary,src = None, tgt = None, src_corpus_dir = None, tgt_corpus_dir = None, 
-                        left_pad = False, shuffle = True, append_eos_to_target = True, padding_strategy = "LONGEST", max_len = 510):
+                        left_pad = False, shuffle = True, append_eos_to_target = True, padding_strategy = "LONGEST", max_len = 510,
+                        sanity_check = False):
         assert (src != None or src_corpus_dir != None)
         assert (tgt != None or tgt_corpus_dir != None)
+        self.tgt_dict = tgt_dict
+        self.src_dict = src_dict
+        self.sanity_check = sanity_check
         if src == None:
             self.src = self.read_corpus(src_corpus_dir)
+        else:
+            self.src = src
         if tgt == None:
             self.tgt = self.read_corpus(tgt_corpus_dir)
+        else:
+            self.tgt = tgt
         self.num_src = len(self.src)
         self.num_tgt = len(self.tgt)
         assert self.num_src == self.num_tgt
-        self.tgt_dict = tgt_dict
-        self.src_dict = src_dict
         self.left_pad = False
         self.shuffle = shuffle
         self.append_eos_to_target = append_eos_to_target
@@ -30,6 +36,7 @@ class MTDataset(Dataset):
     def read_corpus(self, data_dir, src = True):
         ## TODO: split?
         data_list = []
+        count = 0
         with open(data_dir, 'r', encoding = 'utf-8') as f:
             for line in f:
                 word_list = line.strip().split()
@@ -38,6 +45,9 @@ class MTDataset(Dataset):
                 else:
                     idx_list = [self.tgt_dict.get_index(x) for x in word_list]
                 data_list.append(torch.LongTensor(idx_list))
+                count += 1
+                if self.sanity_check and count > 10:
+                    break
         return data_list
 
     def __getitem__(self, index):
@@ -47,7 +57,7 @@ class MTDataset(Dataset):
         if self.append_eos_to_target:
             eos = self.tgt_dict.eos()
             if tgt_item[-1] != eos:
-                tgt_item = torch.cat[tgt_item, torch.LongTensor([eos])]
+                tgt_item = torch.cat([tgt_item, torch.LongTensor([eos])])
 
         data_instance = {
             'source': src_item,
@@ -55,7 +65,10 @@ class MTDataset(Dataset):
             'index': index,
         }
         return data_instance
-    
+
+    def __len__(self):
+        return len(self.src)
+
     def collate(self, idx_tensors, move_eos_to_beginning = False):
         max_length = max([max([x.size(0) for x in idx_tensors]), self.max_len])
         batch_size = len(idx_tensors)
@@ -71,6 +84,7 @@ class MTDataset(Dataset):
 
     def collater(self, data_list, ):
         index_list = [x['index'] for x in data_list]
+        src_lengths = torch.LongTensor([x['source'].ne(self.src_dict.pad()).sum() for x in data_list])
         src_tokens = self.collate([x['source'] for x in data_list])
         tgt_tokens = self.collate([x['target'] for x in data_list])
         prev_output_tokens = self.collate([x['target'] for x in data_list], move_eos_to_beginning = True)
@@ -80,6 +94,7 @@ class MTDataset(Dataset):
             'num_samples': len(index_list),
             'net_input':{
                 'src_tokens':src_tokens,
+                'src_lengths': src_lengths,
                 'tgt_tokens':tgt_tokens,
                 'prev_output_tokens': prev_output_tokens,
             }

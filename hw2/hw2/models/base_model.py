@@ -7,6 +7,7 @@ from .bairu_decoder import BairuDecoder
 
 class BairuEncoderDecoderModel(nn.Module):
     def __init__(self, encoder, decoder):
+        super().__init__()
         self.encoder = encoder
         self.decoder = decoder
 
