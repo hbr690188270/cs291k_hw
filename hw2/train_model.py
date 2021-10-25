@@ -14,6 +14,9 @@ from hw2.metric.cross_entropy_metric import CrossEntropyLossMetric
 from hw2.models.utils import move_to_target_device
 
 import tqdm
+from hw2.logging_module import create_logger
+
+logger,_ = create_logger()
 
 device = torch.device("cuda")
 
@@ -33,16 +36,16 @@ encoder = BairuTransformerEncoder(model_config, common_dict)
 decoder = BairuLSTMDecoder(model_config, common_dict)
 seq2seq_model = BairuEncoderDecoderModel(encoder, decoder).to(device)
 
-metric = CrossEntropyLossMetric(data_dict = common_dict)
+metric = CrossEntropyLossMetric(data_dict = common_dict, debug = False)
 optimizer = torch.optim.AdamW(seq2seq_model.parameters(), lr = 1e-4)
 
 train_dataset = MTDataset(src_dict = common_dict, tgt_dict = common_dict, src_corpus_dir = en_train_corpus_dir, tgt_corpus_dir = ha_train_corpus_dir,
-                            max_len = 100, sanity_check = True)
-train_dataloader = DataLoader(train_dataset, batch_size = 32, shuffle = True, num_workers = 6, collate_fn = train_dataset.collater)
+                            max_len = 100, sanity_check = False)
+train_dataloader = DataLoader(train_dataset, batch_size = 32, shuffle = True, num_workers = 1, collate_fn = train_dataset.collater)
 
 valid_dataset = MTDataset(src_dict = common_dict, tgt_dict = common_dict, src_corpus_dir = en_valid_corpus_dir, tgt_corpus_dir = ha_valid_corpus_dir,
                             max_len = 100)
-valid_dataloader = DataLoader(valid_dataset, batch_size = 32, shuffle = False, num_workers = 6, collate_fn = train_dataset.collater)
+valid_dataloader = DataLoader(valid_dataset, batch_size = 32, shuffle = False, num_workers = 1, collate_fn = train_dataset.collater)
 
 
 # tqdm_train_dataloader = tqdm(train_dataloader)
@@ -81,13 +84,17 @@ training_epoch = 100
 for epoch in range(training_epoch):
     # train_loss, train_acc = train_epoch(seq2seq_model, tqdm_train_dataloader)
     train_loss, train_acc = train_epoch(seq2seq_model, train_dataloader)
-    print("epoch {}, train loss: {}, train acc: {}".format(epoch, train_loss, train_acc))
+    message = "epoch {}, train loss: {}, train acc: {}".format(epoch, train_loss, train_acc)
+    print(message)
+    logger.info(message)
     eval_loss, eval_acc = evaluate(seq2seq_model, train_dataloader)
-    print("\t eval loss: {}, eval acc: {}".format(eval_loss, eval_acc))
+    message = "\t eval loss: {}, eval acc: {}\n".format(eval_loss, eval_acc)
+    print(message)
+    logger.info(message)
     # eval_loss, eval_acc = evaluate(seq2seq_model, valid_dataloader)
     if eval_acc > best_eval_acc:
         best_eval_acc = eval_acc
-        # torch.save(seq2seq_model, 'model.pt')
+        torch.save(seq2seq_model, 'model.pt')
 
 
 

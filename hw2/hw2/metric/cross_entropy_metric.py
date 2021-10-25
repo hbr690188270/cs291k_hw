@@ -15,6 +15,7 @@ class CrossEntropyLossMetric():
         net_output = model(**net_input)
         logits = net_output['output']
         target = net_input['tgt_tokens']
+        prev = net_input['prev_output_tokens']
         vocab_size = logits.size(-1)
 
         loss = F.cross_entropy(logits.view(-1, vocab_size), target.view(-1), ignore_index = self.data_dict.pad(), reduction = reduction)
@@ -22,6 +23,7 @@ class CrossEntropyLossMetric():
         if self.debug:
             print("pred: ", torch.argmax(logits, dim = -1))
             print("target: ", target)
+            print("prev output: ", prev)
             print()
         mask = target.ne(self.data_dict.pad())
         n_correct = torch.sum(
