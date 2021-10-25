@@ -27,14 +27,21 @@ from hw2.logging_module import create_logger
 
 logger,_ = create_logger()
 
+os.environ["MASTER_ADDR"] = "localhost"
+os.environ["MASTER_PORT"] = str(13921)
+os.environ['TORCH_DISTRIBUTED_DEBUG'] = 'DETAIL'
 
-def train_epoch(model, dataloader, metric,optimizer, device):
+def train_epoch(model, dataloader, metric,optimizer, rank):
     loss_list = []
     total_correct = 0
     total_num = 0
-    for i, batch_data in enumerate(tqdm.tqdm(dataloader)):
-    # for batch_data in tqdm(dataloader):
-        batch_data = move_to_target_device(batch_data, device)
+    if rank == 0:
+        loader = tqdm(dataloader)
+    else:
+        loader = dataloader
+
+    for i, batch_data in enumerate(loader):
+        batch_data = move_to_target_device(batch_data, rank)
         loss, correct, total = metric(model, batch_data,)
         optimizer.zero_grad()
         loss.backward()
@@ -45,6 +52,7 @@ def train_epoch(model, dataloader, metric,optimizer, device):
     return np.mean(loss_list), total_correct/total_num
 
 def evaluate(model, dataloader, metric, device):
+    model.eval()
     loss_list = []
     total_correct = 0
     total_num = 0
@@ -62,20 +70,19 @@ def evaluate(model, dataloader, metric, device):
 def train(model, dataset, rank, metric, valid_dataset):
     print(f"Running on rank {rank}.")
 
-    os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = str(13453)
+
 
     # initialize the process group
     dist.init_process_group("nccl", rank=rank, world_size=2)
 
+
     model = copy.deepcopy(model).to(rank)
     model = DDP(model, device_ids=[rank])
 
-
-    train_sampler = torch.utils.data.distributed.DistributedSampler(dataset, num_replicas = 2, rank = rank)
+    train_sampler = torch.utils.data.distributed.DistributedSampler(dataset, num_replicas = 2, rank = rank, shuffle = True)
     # valid_sampler = torch.utils.data.distributed.DistributedSampler(valid_dataset)
 
-    train_loader = DataLoader(dataset, batch_size = 32, shuffle = True, num_workers = 0, collate_fn = dataset.collater, sampler = train_sampler)
+    train_loader = DataLoader(dataset, batch_size = 32, shuffle = False, num_workers = 0, collate_fn = dataset.collater, sampler = train_sampler)
     # valid_loader = DataLoader(valid_dataset, batch_size = 32, shuffle = False, num_workers = 0, collate_fn = dataset.collater, sampler = valid_sampler)
     valid_loader = DataLoader(valid_dataset, batch_size = 32, shuffle = False, num_workers = 0, collate_fn = dataset.collater)
 
@@ -83,38 +90,37 @@ def train(model, dataset, rank, metric, valid_dataset):
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
     epoch_iter = 100
-    patience = 0
-    max_score = 0
-    min_loss = np.inf
     best_model = None
-    for epoch in range(epoch_iter):
-        train_epoch(model, train_loader, metric, optimizer, rank)
-        if rank == 0:
-            train_loss, train_acc = evaluate(model, valid_loader, metric , rank)
 
-            valid_loss, valid_acc = evaluate(model, valid_loader, metric , rank)
+    best_acc = 0
+    for epoch in range(epoch_iter):
+        # train_loader.sampler.set_epoch(epoch)
+        train_epoch(model, train_loader, metric, optimizer, rank)
+
+        if rank == 0:
+            # train_loss, train_acc = evaluate(model, train_loader, metric , rank)
+
+            # valid_loss, valid_acc = evaluate(model, valid_loader, metric , rank)
+            train_loss, train_acc = evaluate(model.module, train_loader, metric , rank)
+
+            valid_loss, valid_acc = evaluate(model.module, valid_loader, metric , rank)
+
 
             message = f"Epoch: {epoch:03d}, Train Acc: {train_acc:.4f}, Val Acc: {valid_acc:.4f}"
             print(message)
             logger.info(message)
             
-            object_list = [val_loss, valid_acc]
+            object_list = [valid_loss, valid_acc]
         else:
             object_list = [None, None]
         dist.broadcast_object_list(object_list, src=0)
-        val_loss, valid_acc = object_list
+        valid_loss, valid_acc = object_list
 
-        if val_loss <= min_loss or valid_acc >= max_score:
-            if val_loss <= min_loss:
-                best_model = copy.deepcopy(model)
-            min_loss = np.min((min_loss, val_loss))
-            max_score = np.max((max_score, valid_acc))
-            patience = 0
-
+        if best_acc < valid_acc:
+            best_acc = valid_acc
+            # if rank == 0:
+                # torch.save(best_model, "model.pt")
         dist.barrier()
-
-        if rank == 0:
-            torch.save(best_model, "model.pt")
 
     dist.barrier()
 
@@ -126,7 +132,8 @@ if __name__ == '__main__':
     world_size = 2
 
     mp.set_start_method("spawn", force=True)
-    # mp.set_sharing_strategy('file_system')
+
+    mp.set_sharing_strategy('file_system')
 
     en_train_corpus_dir = '/data/bairu/mt_dataset/opus/en.BPE'
     ha_train_corpus_dir = '/data/bairu/mt_dataset/opus/ha.BPE'
@@ -148,7 +155,7 @@ if __name__ == '__main__':
     optimizer = torch.optim.AdamW(seq2seq_model.parameters(), lr = 1e-4)
 
     train_dataset = MTDataset(src_dict = common_dict, tgt_dict = common_dict, src_corpus_dir = en_train_corpus_dir, tgt_corpus_dir = ha_train_corpus_dir,
-                                max_len = 100, sanity_check = False)
+                                max_len = 100, sanity_check = True)
 
     valid_dataset = MTDataset(src_dict = common_dict, tgt_dict = common_dict, src_corpus_dir = en_valid_corpus_dir, tgt_corpus_dir = ha_valid_corpus_dir,
                                 max_len = 100)
@@ -163,6 +170,7 @@ if __name__ == '__main__':
     print(size)
     processes = []
     for rank in range(size):
+        print(rank)
         p = Process(target=train, args=(seq2seq_model, train_dataset, rank, metric, valid_dataset))
         p.start()
         processes.append(p)
@@ -170,8 +178,8 @@ if __name__ == '__main__':
     for p in processes:
         p.join()
 
-    model = torch.load("model.pt").to("cuda:0")
-    loss, acc = evaluate(model, valid_dataset, metric, 0)
+    # model = torch.load("model.pt").to("cuda:0")
+    # loss, acc = evaluate(model, valid_dataset, metric, 0)
 
 
 

@@ -40,7 +40,7 @@ metric = CrossEntropyLossMetric(data_dict = common_dict, debug = False)
 optimizer = torch.optim.AdamW(seq2seq_model.parameters(), lr = 1e-4)
 
 train_dataset = MTDataset(src_dict = common_dict, tgt_dict = common_dict, src_corpus_dir = en_train_corpus_dir, tgt_corpus_dir = ha_train_corpus_dir,
-                            max_len = 100, sanity_check = False)
+                            max_len = 100, sanity_check = True)
 train_dataloader = DataLoader(train_dataset, batch_size = 32, shuffle = True, num_workers = 1, collate_fn = train_dataset.collater)
 
 valid_dataset = MTDataset(src_dict = common_dict, tgt_dict = common_dict, src_corpus_dir = en_valid_corpus_dir, tgt_corpus_dir = ha_valid_corpus_dir,

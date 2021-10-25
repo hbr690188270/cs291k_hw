@@ -24,7 +24,7 @@ class BairuConfig():
         decoder_hidden_size = 512,
         decoder_hidden_layer = 2,
         batch_first = True,
-        decoder_residual = True,
+        decoder_residual = False,
         **kwargs
     ):
 

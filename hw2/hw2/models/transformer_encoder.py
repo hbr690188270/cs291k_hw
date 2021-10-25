@@ -35,11 +35,14 @@ class BairuTransformerEncoder(BairuEncoder):
         self.dropout = nn.Dropout(p = config.hidden_dropout_prob)
         self.batch_first = config.batch_first
 
-        self.encoder_layer = TransformerEncoderLayer(d_model = self.hidden_size,nhead = config.num_attention_heads, dim_feedforward = config.intermediate_size, 
-                                                        dropout = config.hidden_dropout_prob, activation = config.hidden_act, 
-                                                        layer_norm_eps = config.layer_norm_eps, batch_first = self.batch_first)
+        # self.encoder_layer = TransformerEncoderLayer(d_model = self.hidden_size,nhead = config.num_attention_heads, dim_feedforward = config.intermediate_size, 
+        #                                                 dropout = config.hidden_dropout_prob, activation = config.hidden_act, 
+        #                                                 layer_norm_eps = config.layer_norm_eps, batch_first = True)
 
-        self.encoder = TransformerEncoder(encoder_layer = self.encoder_layer, num_layers = config.num_hidden_layers)
+        # self.encoder = TransformerEncoder(encoder_layer = self.encoder_layer, num_layers = config.num_hidden_layers)
+        self.encoder = TransformerEncoder(encoder_layer = TransformerEncoderLayer(d_model = self.hidden_size,nhead = config.num_attention_heads, dim_feedforward = config.intermediate_size, 
+                                                        dropout = config.hidden_dropout_prob, activation = config.hidden_act, 
+                                                        layer_norm_eps = config.layer_norm_eps, batch_first = True), num_layers = config.num_hidden_layers)
     
 
     def forward_embedding(self, src_tokens,):
@@ -57,13 +60,7 @@ class BairuTransformerEncoder(BairuEncoder):
         encoder_padding_mask = src_tokens.eq(self.padding_idx)
         x, embed = self.forward_embedding(src_tokens)
         x = x * (1- encoder_padding_mask.unsqueeze(-1).type_as(x))
-        if not self.batch_first:
-            x = x.transpose(0, 1)
         x = self.encoder(x, src_key_padding_mask = encoder_padding_mask)
-
-        if not self.batch_first:
-            x = x.transpose(0, 1)
-
         return {
             'encoder_out': x,
             'encoder_padding_mask': encoder_padding_mask,

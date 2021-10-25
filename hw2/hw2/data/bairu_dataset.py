@@ -15,13 +15,23 @@ class MTDataset(Dataset):
         self.src_dict = src_dict
         self.sanity_check = sanity_check
         if src == None:
-            self.src = self.read_corpus(src_corpus_dir)
+            self.src, src_error_index = self.read_corpus(src_corpus_dir)
         else:
             self.src = src
         if tgt == None:
-            self.tgt = self.read_corpus(tgt_corpus_dir)
+            self.tgt, tgt_error_index = self.read_corpus(tgt_corpus_dir)
         else:
             self.tgt = tgt
+        
+        all_error_index = src_error_index.union(tgt_error_index)
+        filtered_src, filtered_tgt = [],[]
+        for i in range(len(self.src)):
+            if i not in all_error_index:
+                filtered_src.append(self.src[i])
+                filtered_tgt.append(self.tgt[i])
+        self.src = filtered_src
+        self.tgt = filtered_tgt
+
         self.num_src = len(self.src)
         self.num_tgt = len(self.tgt)
         assert self.num_src == self.num_tgt
@@ -37,6 +47,7 @@ class MTDataset(Dataset):
         ## TODO: split?
         data_list = []
         count = 0
+        error_index = []
         with open(data_dir, 'r', encoding = 'utf-8') as f:
             for line in f:
                 word_list = line.strip().split()
@@ -44,16 +55,17 @@ class MTDataset(Dataset):
                     idx_list = [self.src_dict.get_index(x) for x in word_list]
                 else:
                     idx_list = [self.tgt_dict.get_index(x) for x in word_list]
+                if len(word_list) == 0:
+                    error_index.append(count)
                 data_list.append(torch.LongTensor(idx_list))
                 count += 1
-                if self.sanity_check and count > 10:
+                if self.sanity_check and count >= 10000:
                     break
-        return data_list
+        return data_list, set(error_index)
 
     def __getitem__(self, index):
         src_item = self.src[index]
         tgt_item = self.tgt[index]
-
         if self.append_eos_to_target:
             eos = self.tgt_dict.eos()
             if tgt_item[-1] != eos:
@@ -70,16 +82,24 @@ class MTDataset(Dataset):
         return len(self.src)
 
     def collate(self, idx_tensors, move_eos_to_beginning = False):
-        max_length = max([max([x.size(0) for x in idx_tensors]), self.max_len])
+        max_length = min([max([x.size(0) for x in idx_tensors]), self.max_len])
+        # max_length = max([x.size(0) for x in idx_tensors])
+
         batch_size = len(idx_tensors)
         new_idx_tensors = idx_tensors[0].new(batch_size, max_length).fill_(self.src_dict.pad())
         for i in range(batch_size):
             orig_length = len(idx_tensors[i])
             if move_eos_to_beginning:
                 new_idx_tensors[i][0] = self.tgt_dict.eos()
-                new_idx_tensors[i][1:orig_length] = idx_tensors[i][:-1]
+                if orig_length > max_length:
+                    new_idx_tensors[i][1:max_length] = idx_tensors[i][:max_length - 1]
+                else:
+                    new_idx_tensors[i][1:orig_length] = idx_tensors[i][:-1]
             else:
-                new_idx_tensors[i][:orig_length] = idx_tensors[i]
+                if orig_length > max_length:
+                    new_idx_tensors[i][:max_length] = idx_tensors[i][:max_length]
+                else:
+                    new_idx_tensors[i][:orig_length] = idx_tensors[i]
         return new_idx_tensors
 
     def collater(self, data_list, ):
