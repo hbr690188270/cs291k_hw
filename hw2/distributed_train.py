@@ -49,7 +49,7 @@ def train_epoch(model, dataloader, metric,optimizer, rank):
         loss_list.append(loss.item())
         total_correct += correct
         total_num += total
-    return np.mean(loss_list), total_correct/total_num
+    return float(np.mean(loss_list)), total_correct/total_num
 
 def evaluate(model, dataloader, metric, device):
     model.eval()
@@ -63,7 +63,7 @@ def evaluate(model, dataloader, metric, device):
             loss_list.append(loss.item())
             total_correct += correct
             total_num += total
-    return np.mean(loss_list), total_correct/total_num
+    return float(np.mean(loss_list)), total_correct/total_num
 
 
 
@@ -79,7 +79,7 @@ def train(model, dataset, rank, metric, valid_dataset):
     model = copy.deepcopy(model).to(rank)
     model = DDP(model, device_ids=[rank])
 
-    train_sampler = torch.utils.data.distributed.DistributedSampler(dataset, num_replicas = 2, rank = rank, shuffle = True)
+    train_sampler = torch.utils.data.distributed.DistributedSampler(dataset, rank = rank, shuffle = True)
     # valid_sampler = torch.utils.data.distributed.DistributedSampler(valid_dataset)
 
     train_loader = DataLoader(dataset, batch_size = 32, shuffle = False, num_workers = 0, collate_fn = dataset.collater, sampler = train_sampler)
@@ -109,19 +109,24 @@ def train(model, dataset, rank, metric, valid_dataset):
             message = f"Epoch: {epoch:03d}, Train Acc: {train_acc:.4f}, Val Acc: {valid_acc:.4f}"
             print(message)
             logger.info(message)
-            
+            print(valid_loss, valid_acc)
+            print(type(valid_loss), type(valid_acc))
             object_list = [valid_loss, valid_acc]
         else:
             object_list = [None, None]
+        print("before broadcast, rank: ", rank)
         dist.broadcast_object_list(object_list, src=0)
+        print("after broadcast, rank: ", rank)
+
         valid_loss, valid_acc = object_list
 
         if best_acc < valid_acc:
             best_acc = valid_acc
             # if rank == 0:
                 # torch.save(best_model, "model.pt")
+        print("before barrier, rank: ", rank)
         dist.barrier()
-
+        print("after barrier, rank: ", rank)
     dist.barrier()
 
     dist.destroy_process_group()
@@ -155,7 +160,7 @@ if __name__ == '__main__':
     optimizer = torch.optim.AdamW(seq2seq_model.parameters(), lr = 1e-4)
 
     train_dataset = MTDataset(src_dict = common_dict, tgt_dict = common_dict, src_corpus_dir = en_train_corpus_dir, tgt_corpus_dir = ha_train_corpus_dir,
-                                max_len = 100, sanity_check = True)
+                                max_len = 100, sanity_check = False)
 
     valid_dataset = MTDataset(src_dict = common_dict, tgt_dict = common_dict, src_corpus_dir = en_valid_corpus_dir, tgt_corpus_dir = ha_valid_corpus_dir,
                                 max_len = 100)

@@ -16,7 +16,24 @@ from hw2.models.utils import move_to_target_device
 import tqdm
 from hw2.logging_module import create_logger
 
-logger,_ = create_logger()
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--lr", type = float, default = 1e-4)
+parser.add_argument("--hidden_dropout", type = float, default = 0.1)
+parser.add_argument("--hidden", type = int, default = 256)
+parser.add_argument("--emb_dim", type = int, default = 256)
+parser.add_argument("--layer", type = int, default = 2)
+parser.add_argument("--ffn_dim", type = int, default = 1024)
+parser.add_argument("--decay", type = float, default = 1e-6)
+parser.add_argument("--att_dropout", type = float, default = 0.1)
+parser.add_argument("--bs", type = int, default = 256)
+parser.add_argument("--dec_init", type = str, default = "enc")
+
+args = parser.parse_args()
+
+
+logger,log_dir = create_logger()
 
 device = torch.device("cuda")
 
@@ -30,22 +47,25 @@ common_dict = dictionary()
 common_dict.build_vocab([en_train_corpus_dir, ha_train_corpus_dir])
 print("vocab size: ", len(common_dict.word_list))
 
-model_config = BairuConfig()
+model_config = BairuConfig(embedding_dim = args.emb_dim, hidden_size = args.hidden, num_hidden_layers = args.layer, intermediate_size = args.ffn_dim, hidden_dropout_prob = args.hidden_dropout, 
+                            decoder_embedding_dim = args.emb_dim, decoder_hidden_layer = args.layer, decoder_hidden_size = args.hidden,
+                            attention_probs_dropout_prob = args.att_dropout, pad_token_id = common_dict.pad(), decoder_init = args.dec_init)
+
 token_embedding = torch.nn.Embedding(num_embeddings = common_dict.num_tokens, embedding_dim = model_config.embedding_dim, padding_idx = common_dict.pad())
 encoder = BairuTransformerEncoder(model_config, common_dict)
 decoder = BairuLSTMDecoder(model_config, common_dict)
 seq2seq_model = BairuEncoderDecoderModel(encoder, decoder).to(device)
 
 metric = CrossEntropyLossMetric(data_dict = common_dict, debug = False)
-optimizer = torch.optim.AdamW(seq2seq_model.parameters(), lr = 1e-4)
+optimizer = torch.optim.AdamW(seq2seq_model.parameters(), lr = args.lr, weight_decay = args.decay)
 
 train_dataset = MTDataset(src_dict = common_dict, tgt_dict = common_dict, src_corpus_dir = en_train_corpus_dir, tgt_corpus_dir = ha_train_corpus_dir,
-                            max_len = 100, sanity_check = True)
-train_dataloader = DataLoader(train_dataset, batch_size = 32, shuffle = True, num_workers = 1, collate_fn = train_dataset.collater)
+                            max_len = 100, sanity_check = False)
+train_dataloader = DataLoader(train_dataset, batch_size = args.bs, shuffle = True, num_workers = 6, collate_fn = train_dataset.collater)
 
 valid_dataset = MTDataset(src_dict = common_dict, tgt_dict = common_dict, src_corpus_dir = en_valid_corpus_dir, tgt_corpus_dir = ha_valid_corpus_dir,
                             max_len = 100)
-valid_dataloader = DataLoader(valid_dataset, batch_size = 32, shuffle = False, num_workers = 1, collate_fn = train_dataset.collater)
+valid_dataloader = DataLoader(valid_dataset, batch_size = args.bs, shuffle = False, num_workers = 6, collate_fn = train_dataset.collater)
 
 
 # tqdm_train_dataloader = tqdm(train_dataloader)
@@ -87,14 +107,14 @@ for epoch in range(training_epoch):
     message = "epoch {}, train loss: {}, train acc: {}".format(epoch, train_loss, train_acc)
     print(message)
     logger.info(message)
-    eval_loss, eval_acc = evaluate(seq2seq_model, train_dataloader)
+    eval_loss, eval_acc = evaluate(seq2seq_model, valid_dataloader)
     message = "\t eval loss: {}, eval acc: {}\n".format(eval_loss, eval_acc)
     print(message)
     logger.info(message)
     # eval_loss, eval_acc = evaluate(seq2seq_model, valid_dataloader)
     if eval_acc > best_eval_acc:
         best_eval_acc = eval_acc
-        torch.save(seq2seq_model, 'model.pt')
+        torch.save(seq2seq_model, log_dir + '/model.pt')
 
 
 

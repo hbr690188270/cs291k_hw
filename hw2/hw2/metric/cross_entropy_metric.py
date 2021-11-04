@@ -28,8 +28,8 @@ class CrossEntropyLossMetric():
         mask = target.ne(self.data_dict.pad())
         n_correct = torch.sum(
             logits.argmax(-1).masked_select(mask).eq(target.masked_select(mask))
-        )
-        total = torch.sum(mask)    
+        ).item()
+        total = torch.sum(mask).item()
         accuracy = n_correct / total
         return loss, n_correct, total
 

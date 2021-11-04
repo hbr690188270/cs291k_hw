@@ -3,11 +3,11 @@ class BairuConfig():
     def __init__(
         self,
         vocab_size=30522,
-        embedding_dim = 768,
-        hidden_size=768,
+        embedding_dim = 256,
+        hidden_size=256,
         num_hidden_layers=2,
-        num_attention_heads=12,
-        intermediate_size=2048,
+        num_attention_heads=8,
+        intermediate_size=1024,
         hidden_act="gelu",
         hidden_dropout_prob=0.1,
         attention_probs_dropout_prob=0.1,
@@ -20,11 +20,12 @@ class BairuConfig():
         layernorm_embedding = True,
         use_cache=True,
         classifier_dropout=None,
-        decoder_embedding_dim = 768,
-        decoder_hidden_size = 512,
+        decoder_embedding_dim = 256,
+        decoder_hidden_size = 256,
         decoder_hidden_layer = 2,
-        batch_first = True,
-        decoder_residual = False,
+        batch_first = False,
+        decoder_residual = True,
+        decoder_init = "enc",  ## enc or none
         **kwargs
     ):
 
@@ -51,6 +52,7 @@ class BairuConfig():
         self.decoder_hidden_size = decoder_hidden_size
         self.decoder_embedding_dim = decoder_embedding_dim
         self.decoder_residual = decoder_residual
+        self.decoder_init = decoder_init
 
         self.bos_token_id = kwargs.pop("bos_token_id", None)
         self.pad_token_id = kwargs.pop("pad_token_id", None)

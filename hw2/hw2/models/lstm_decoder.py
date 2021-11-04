@@ -10,10 +10,12 @@ from transformers import BertModel
 class LSTMCrossAttention(nn.Module):
     def __init__(self, config:BairuConfig):
         super().__init__()
-        self.input_proj = nn.Linear(config.decoder_hidden_size, config.hidden_size)
-        self.output_proj = nn.Linear(
-            config.decoder_hidden_size + config.hidden_size, config.decoder_hidden_size,
-        )
+        self.decoder_transform = nn.Linear(config.decoder_hidden_size, config.hidden_size)
+        
+        if config.hidden_size != config.decoder_hidden_size:
+            self.encoder_transform = nn.Linear(config.hidden_size, config.decoder_hidden_size,)
+        else:
+            self.encoder_transform = None
 
     def forward(self, decoder_hidden_state, encoder_out, encoder_padding_mask = None):
         '''
@@ -21,15 +23,18 @@ class LSTMCrossAttention(nn.Module):
         encoder_out: [enc_seq_len, batch_size , encoder_output_dim]   batch_first = False!
         encoder_padding_mask: [enc_seq_len, batch_size, encoder_output_dim]  batch_first = False!
         '''
-        x = self.input_proj(decoder_hidden_state)
+        x = self.decoder_transform(decoder_hidden_state)
         weight = (x.unsqueeze(0) * encoder_out).sum(dim = 2)
         if encoder_padding_mask != None:
-            weight = weight.float().masked_fill_(encoder_padding_mask, float("-inf"))
+            weight = weight.float().masked_fill_(encoder_padding_mask, -10000)
         
-        attention_score = F.softmax(weight, dim = 0)  ## seq_len  batch_size
-        x = (attention_score.unsqueeze(2) * encoder_out).sum(0)
-        x = self.output_proj(torch.cat([x, decoder_hidden_state], dim = 1))
-        return x, attention_score
+        attention_score = torch.unsqueeze(F.softmax(weight, dim = 0), dim = 2)  ## seq_len  batch_size  1
+        x = (attention_score * encoder_out).sum(0)
+        if self.encoder_transform is not None:
+            x = self.output_proj(x) + decoder_hidden_state  ## something like residual connection
+        else:
+            x = x + decoder_hidden_state
+        return x
 
 
 class BairuLSTMDecoder(BairuDecoder):
@@ -43,6 +48,7 @@ class BairuLSTMDecoder(BairuDecoder):
         self.num_layers = config.decoder_hidden_layer
         self.batch_first = config.batch_first
         self.input_feed_size = config.decoder_hidden_size
+        self.decoder_init = config.decoder_init
         if token_embedding is None:
             self.token_embedding = nn.Embedding(num_embeddings = num_tokens, embedding_dim = self.embedding_dim, padding_idx = self.padding_idx, )
         else:
@@ -88,38 +94,45 @@ class BairuLSTMDecoder(BairuDecoder):
 
         batch_size, seq_len = prev_output_tokens.size()
         x, embed = self.forward_embedding(prev_output_tokens)
-        if self.batch_first:
+        if not self.batch_first:
             x = x.transpose(0, 1)
             encoder_output = encoder_output.transpose(0,1)
             encoder_padding_mask = encoder_padding_mask.transpose(0,1)
-        
-        zero_state = x.new_zeros(batch_size, self.hidden_size)
-        prev_hiddens = [zero_state for _ in range(self.hidden_layer)]
-        prev_cells = [zero_state for _ in range(self.hidden_layer)]
+        if self.decoder_init == 'enc':
+            if self.batch_first:
+                enc_init = torch.mean(encoder_output, dim = 1)
+            else:
+                enc_init = torch.mean(encoder_output, dim = 0)
+                h0 = [enc_init for _ in range(self.hidden_layer)]
+                c0 = [enc_init for _ in range(self.hidden_layer)]            
+        elif self.decoder_init == 'none':
+            zero_state = x.new_zeros(batch_size, self.hidden_size)
+            h0 = [zero_state for _ in range(self.hidden_layer)]
+            c0 = [zero_state for _ in range(self.hidden_layer)]
+        else:
+            raise Exception()
         ## Please refer to paper  Effective Approaches to Attention-based Neural Machine Translation  for the input feed operation 
-        input_feed = x.new_zeros(batch_size, self.hidden_size)
+        prev_hidden = x.new_zeros(batch_size, self.hidden_size)
 
 
         outs = []
         for j in range(seq_len):
-            input_x = torch.cat([x[j,:,:], input_feed], dim = 1)
+            input_x = torch.cat([x[j,:,:], prev_hidden], dim = 1)
             for i, lstm_cell in enumerate(self.LSTMLayers):
-                hidden_state, cell_state = lstm_cell(input_x,(prev_hiddens[i], prev_cells[i]))
-                # hidden_state, cell_state = lstm_cell(input_x)
+                h, c = lstm_cell(input_x,(h0[i], c0[i]))
 
-                input_x = self.dropout(hidden_state)
+                input_x = self.dropout(h)
                 if self.residual:
-                    input_x = input_x + prev_hiddens[i]
-                prev_hiddens[i] = hidden_state
-                prev_cells[i] = cell_state
+                    input_x = input_x + h0[i]
+                h0[i] = h
+                c0[i] = c
 
             ## Attention
-            out, _ = self.LSTMAttention(hidden_state, encoder_output, encoder_padding_mask)
-            out = self.dropout(out)
+            out = self.dropout(self.LSTMAttention(h, encoder_output, encoder_padding_mask))
             outs.append(out)
-            input_feed = out
+            prev_hidden = out
         x = torch.stack(outs, dim = 0)
-        if self.batch_first:
+        if not self.batch_first:
             x = x.transpose(0, 1)
         return x, []
         # return {
