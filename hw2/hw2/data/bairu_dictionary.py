@@ -6,6 +6,7 @@ import torch.nn.functional as F
 class dictionary():
     def __init__(self, bos = "<s>", pad = "<pad>", eos = "</s>", unk = "<unk>",):
         self.word2idx = {}
+        self.idx2word = {}
         self.word2freq = {}
         self.word_list = []
         self.bos_word = bos
@@ -29,6 +30,7 @@ class dictionary():
             self.word2idx[word] = idx
             self.word2freq[word] = 1
             self.word_list.append(word)
+            self.idx2word[idx] = word
             return idx
 
     def bos(self):
@@ -44,7 +46,10 @@ class dictionary():
         return self.unk_index
 
     def get_index(self, word):
-        return self.word2idx[word]    
+        if word in self.word2idx:
+            return self.word2idx[word]    
+        else:
+            return self.unk()
 
     def build_vocab(self, filelist):
         for filename in filelist:
@@ -65,4 +70,24 @@ class dictionary():
         import pickle
         with open(save_dir, 'wb') as f:
             pickle.dump(self, f)
+
+    def decode(self, idx_list):
+        '''
+        idx_list: list
+        '''
+        tokens = [self.idx2word[x] for x in idx_list]
+        if len(tokens) == 0:
+            return ""
+        strings = []
+        word = ""
+        for i in range(len(tokens)):
+            if tokens[i][-2:] == '@@': 
+                word += tokens[i][:-2]
+            else:
+                word += tokens[i]
+                strings.append(word)
+                word = ""
+            # else:
+
+        return ' '.join(strings)
 

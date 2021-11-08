@@ -29,7 +29,7 @@ parser.add_argument("--decay", type = float, default = 1e-6)
 parser.add_argument("--att_dropout", type = float, default = 0.1)
 parser.add_argument("--bs", type = int, default = 256)
 parser.add_argument("--dec_init", type = str, default = "enc")
-parser.add_argument("--large_vocab", action = 'store_true')
+
 args = parser.parse_args()
 
 
@@ -37,19 +37,11 @@ logger,log_dir = create_logger()
 
 device = torch.device("cuda")
 
-if args.large_vocab:
-    en_train_corpus_dir = '/data/bairu/mt_dataset/sep_opus/tokenized_en.txt'
-    ha_train_corpus_dir = '/data/bairu/mt_dataset/sep_opus/tokenized_ha.txt'
+en_train_corpus_dir = '/data/bairu/mt_dataset/opus/en.BPE'
+ha_train_corpus_dir = '/data/bairu/mt_dataset/opus/ha.BPE'
 
-    en_valid_corpus_dir = '/data/bairu/mt_dataset/sep_opus/tokenized_en_dev.txt'
-    ha_valid_corpus_dir = '/data/bairu/mt_dataset/sep_opus/tokenized_ha_dev.txt'
-
-else:
-    en_train_corpus_dir = '/data/bairu/mt_dataset/opus/bpe_en.txt'
-    ha_train_corpus_dir = '/data/bairu/mt_dataset/opus/bpe_ha.txt'
-
-    en_valid_corpus_dir = '/data/bairu/mt_dataset/opus/bpe_en_dev.txt'
-    ha_valid_corpus_dir = '/data/bairu/mt_dataset/opus/bpe_ha_dev.txt'
+en_valid_corpus_dir = '/data/bairu/mt_dataset/opus/en_dev.BPE'
+ha_valid_corpus_dir = '/data/bairu/mt_dataset/opus/ha_dev.BPE'
 
 common_dict = dictionary()
 common_dict.build_vocab([en_train_corpus_dir, ha_train_corpus_dir])

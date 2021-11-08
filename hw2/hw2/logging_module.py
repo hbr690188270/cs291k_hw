@@ -8,13 +8,13 @@ def create_logger(logger_name = "log", root_path = './logs/'):
 
     curr_time =  time.localtime(time.time())
     log_dir = time.strftime('%Y-%m-%d', curr_time)
-    log_file_name = time.strftime('%H-%M-%S', curr_time)
+    time_dir = time.strftime('%H-%M-%S', curr_time)
 
-    save_dir = root_path + log_dir
+    save_dir = root_path + log_dir + "/" + time_dir
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    log_file_dir = save_dir + "/" + log_file_name + ".txt"
+    log_file_dir = save_dir + "/" + "log.txt"
     fh = logging.FileHandler(log_file_dir, mode='w')
     formatter = logging.Formatter("%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s")
     fh.setFormatter(formatter)

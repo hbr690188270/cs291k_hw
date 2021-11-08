@@ -59,7 +59,7 @@ class MTDataset(Dataset):
                     error_index.append(count)
                 data_list.append(torch.LongTensor(idx_list))
                 count += 1
-                if self.sanity_check and count >= 10000:
+                if self.sanity_check and count >= 100:
                     break
         return data_list, set(error_index)
 

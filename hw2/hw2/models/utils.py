@@ -19,3 +19,15 @@ def move_to_target_device(object, device):
     else:
         return object
 
+def strip_pad(tensor, pad, eos):
+    # print(tensor)
+    eos_idx = (tensor == eos).nonzero()
+    if len(eos_idx) == 0:
+        tensor = tensor
+    else:
+        tensor = tensor[:eos_idx[0][0]]
+    return tensor[tensor.ne(pad)]
+
+
+
+
