@@ -7,7 +7,7 @@ from .bairu_dictionary import dictionary
 
 class MTDataset(Dataset):
     def __init__(self, src_dict:dictionary, tgt_dict:dictionary,src = None, tgt = None, src_corpus_dir = None, tgt_corpus_dir = None, 
-                        left_pad = False, shuffle = True, append_eos_to_target = True, padding_strategy = "LONGEST", max_len = 510,
+                        left_pad = False, shuffle = True, append_eos_to_target = True, padding_strategy = "LONGEST", max_len = 100,
                         sanity_check = False):
         assert (src != None or src_corpus_dir != None)
         assert (tgt != None or tgt_corpus_dir != None)

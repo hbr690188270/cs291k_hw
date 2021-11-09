@@ -1,3 +1,4 @@
+from os import error
 import numpy as np
 import re
 from bs4 import BeautifulSoup
@@ -15,14 +16,11 @@ def remove_html(htmlstr):
     # s = re_cdata.sub('',htmlstr)#去掉CDATA
     # s = re_script.sub('',s) #去掉SCRIPT
     # s = re_style.sub('',s)#去掉style 
-    s = re_br2.sub('',s)#将br转换为换行
-    s = re_br3.sub('',s)#将br转换为换行
+    # s = re_br2.sub('',s)#将br转换为换行
+    # s = re_br3.sub('',s)#将br转换为换行
 
     s = re_h.sub('',s) #去掉HTML 标签
     s = re_comment.sub('',s)#去掉HTML注释
-    #去掉多余的空行
-    # blank_line=re.compile('n+')
-    # s = blank_line.sub(' ',s)
     return s
 def remove_time(str_sentence):
     str_sentence = re.sub('\(.*:.*\) ', "", str_sentence)
@@ -80,19 +78,22 @@ def write_file(data_dir = '/data/bairu/mt_dataset/opus/', filename = 'en.txt', d
 
 def read_file(data_dir = '/data/bairu/mt_dataset/dev/', filename = 'dev_en-ha.txt.en'):
     data_list = []
+    error_idxs = []
     filtered = 0
+    count = 0
     with open(data_dir + filename, 'r', encoding = 'utf-8') as f:
         for line in f:
             sentence = line.strip().lower()
             sentence = process_string(sentence)
             if len(sentence) == 0:
                 filtered += 1
-                print(line)
-                continue
+                error_idxs.append(count)
+                # continue
             data_list.append(sentence)
+            count += 1
     print("total data: ", len(data_list))
     print("filter num: ", filtered)
-    return data_list
+    return data_list, set(error_idxs)
 
 # source_corpus = []
 # target_corpus = []
@@ -105,9 +106,12 @@ if __name__ == '__main__':
     write_file(data_list = all_corpus, filename = 'all.txt')
 
 
-    dev_en = read_file(filename = 'dev.en')
-    dev_ha = read_file(filename = 'dev.ha')
-    write_file(data_list = dev_en, filename = 'dev_en-ha.txt.en')
-    write_file(data_list = dev_ha, filename = 'dev_en-ha.txt.ha')
+    dev_en, en_errors = read_file(filename = 'dev.en')
+    dev_ha, ha_errors = read_file(filename = 'dev.ha')
+    all_errors = en_errors.union(ha_errors)
+    new_dev_en = [dev_en[x] for x in range(len(dev_en)) if x not in all_errors]
+    new_dev_ha = [dev_ha[x] for x in range(len(dev_ha)) if x not in all_errors]
+    write_file(data_list = new_dev_en, filename = 'dev_en-ha.txt.en')
+    write_file(data_list = new_dev_ha, filename = 'dev_en-ha.txt.ha')
 
 
