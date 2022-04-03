@@ -26,6 +26,7 @@ class BairuConfig():
         batch_first = False,
         decoder_residual = True,
         decoder_init = "enc",  ## enc or none
+        decoder_pe = 'sin',
         **kwargs
     ):
 
@@ -53,10 +54,6 @@ class BairuConfig():
         self.decoder_embedding_dim = decoder_embedding_dim
         self.decoder_residual = decoder_residual
         self.decoder_init = decoder_init
-
-        self.bos_token_id = kwargs.pop("bos_token_id", None)
-        self.pad_token_id = kwargs.pop("pad_token_id", None)
-        self.eos_token_id = kwargs.pop("eos_token_id", None)
-        self.sep_token_id = kwargs.pop("sep_token_id", None)
+        self.decoder_pe = decoder_pe
 
 

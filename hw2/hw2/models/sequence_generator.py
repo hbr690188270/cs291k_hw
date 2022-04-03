@@ -28,15 +28,13 @@ class SequenceGenerator(nn.Module):
         '''
         predict_prob: batch_size * beam_size, vocab_num
         scores: batch_size, beam_size, max_length 
-
         add predict prob with prob score   first reshape the predict_prob into batch_size, beam_size, 1   then broadcast
         '''
         total_item, vocab_num = predict_prob.size()
         batch_size = total_item // self.beam_size
-        # predict_prob = predict_prob.view(batch_size, 1, vocab_num).repeat(1, self.beam_size, 1)
         predict_prob = predict_prob.view(batch_size, self.beam_size, vocab_num)
         if position == 0:
-            predict_prob = predict_prob
+            predict_prob = predict_prob[:, ::self.beam_size, :].contiguous()
         else:
             predict_prob = predict_prob + scores[:,:, position - 1].unsqueeze(-1)    ## batch_size, beam_size, vocab_num
 
@@ -44,7 +42,7 @@ class SequenceGenerator(nn.Module):
         top_scores, top_indices = top_pred
         beam_idx = top_indices // vocab_num
         word_idx = torch.fmod(top_indices, vocab_num)
-        return top_scores, word_idx, beam_idx     
+        return top_scores, word_idx, beam_idx       
 
     def expand_encoder_output(self, encoder_output, new_order):
         encoder_output['encoder_out'] = encoder_output['encoder_out'].index_select(0, new_order)

@@ -4,33 +4,25 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .bairu_encoder import BairuEncoder
 from .bairu_config import BairuConfig
+from ..module.embedding import TransformerEmbedding
+from ..data.bairu_dictionary import dictionary
 
 from .utils import get_positions
 
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 
 class BairuTransformerEncoder(BairuEncoder):
-    def __init__(self, config: BairuConfig, dictionary, token_embedding = None):
-        super().__init__(dictionary)
-        num_tokens = dictionary.num_tokens
+    def __init__(self, config: BairuConfig, src_dict: dictionary, ):
+        '''
+        mainly refers to fairseq implementation of Transformer encoder; but also rewrite the TransformerEmbedding module according to huggingface's BERT implementation
+        '''
+        super().__init__(src_dict)
+        num_tokens = src_dict.num_tokens
         self.embedding_dim = config.embedding_dim
-        self.padding_idx = dictionary.pad()
+        self.padding_idx = src_dict.pad()
         self.hidden_size = config.hidden_size
-        if token_embedding is None:
-            self.token_embedding = nn.Embedding(num_embeddings = num_tokens, embedding_dim = self.embedding_dim, padding_idx = self.padding_idx, )
-
-        else:
-            self.token_embedding = token_embedding
-
-        if config.layernorm_embedding:
-            self.layernorm_embedding = torch.nn.LayerNorm(self.embedding_dim)
-        else:
-            self.layernorm_embedding = None
-    
-        if config.position_embedding_type == 'absolute':
-            self.positional_embedding = nn.Embedding(num_embeddings = config.max_position_embeddings, embedding_dim = self.embedding_dim)
-        else:
-            self.positional_embedding = None
+        self.embedding = TransformerEmbedding(num_tokens, config.hidden_size, pad_token_id = src_dict.pad(), max_position_embeddings = config.max_position_embeddings, hidden_dropout_prob = config.hidden_dropout_prob,
+                                             layer_norm_eps = config.layer_norm_eps, pe_type = config.decoder_pe, layernorm_embedding = config.layernorm_embedding)
 
         self.dropout = nn.Dropout(p = config.hidden_dropout_prob)
         self.batch_first = config.batch_first
@@ -39,20 +31,15 @@ class BairuTransformerEncoder(BairuEncoder):
         #                                                 dropout = config.hidden_dropout_prob, activation = config.hidden_act, 
         #                                                 layer_norm_eps = config.layer_norm_eps, batch_first = True)
 
-        # self.encoder = TransformerEncoder(encoder_layer = self.encoder_layer, num_layers = config.num_hidden_layers)
-        self.encoder = TransformerEncoder(encoder_layer = TransformerEncoderLayer(d_model = self.hidden_size,nhead = config.num_attention_heads, dim_feedforward = config.intermediate_size, 
-                                                        dropout = config.hidden_dropout_prob, activation = config.hidden_act, 
-                                                        layer_norm_eps = config.layer_norm_eps, batch_first = True), num_layers = config.num_hidden_layers)
+        transformer_layer = TransformerEncoderLayer(d_model = self.hidden_size,nhead = config.num_attention_heads, dim_feedforward = config.intermediate_size,
+                                    dropout = config.hidden_dropout_prob, activation = 'relu', batch_first = config.batch_first
+                                    )
+
+        self.encoder = TransformerEncoder(transformer_layer, num_layers = config.num_hidden_layers)        
     
 
     def forward_embedding(self, src_tokens,):
-        x = embed = self.token_embedding(src_tokens)
-        if self.positional_embedding is not None:
-            positions = get_positions(src_tokens, self.padding_idx)
-            x = embed + self.positional_embedding(positions)
-        if self.layernorm_embedding is not None:
-            x = self.layernorm_embedding(x)
-        x = self.dropout(x)
+        x = embed = self.embedding(src_tokens)
         return x, embed
 
 
